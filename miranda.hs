@@ -198,5 +198,8 @@ s_ds_dynamic (Call n) e s              = s_ds_dynamic (e n) e s
 s_dynamic :: Stm -> State -> State
 s_dynamic stm state = s_ds_dynamic stm baseEnv state
 
+s_ds_mixed :: Stm -> EnvP -> State -> State
+s_ds_mixed = undefined
+
 s_mixed :: Stm -> State -> State
 s_mixed stm state = s_ds_mixed stm baseEnv state

@@ -72,6 +72,10 @@ procParser = between sc eof stm
 stm :: Parser Stm
 stm = parens stm <|> stmComp
 
+-- Parse a single statment, or multiple if parenthesis are used
+singleStm :: Parser Stm
+singleStm = parens stmComp <|> stm'
+
 -- Convert list of statements to Comp data structure
 listToComp :: [Stm] -> Stm
 listToComp l
@@ -112,7 +116,7 @@ decP = do
   void (rword "proc")
   name <- identifier
   void (rword "is")
-  stm1 <- stm
+  stm1 <- singleStm
   return ([(name, stm1)])
 
 -- Parse 0 or more variable declarations
