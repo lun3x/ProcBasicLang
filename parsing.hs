@@ -4,7 +4,7 @@ import Text.Megaparsec.Expr
 import Text.Megaparsec.String
 import qualified Text.Megaparsec.Lexer as L
 import Miranda (DecV, DecP, Aexp(N, V, Mult, Add, Sub), Bexp(TRUE, FALSE, Neg, And, Eq, Le), Stm(Ass, Skip, Comp, If, While, Block, Call))
-import Miranda(pretty_print, s_dynamic, baseState)
+import Miranda(pretty_print, s_dynamic, s_mixed, baseState)
 import Data.List
 
 {---------Lexer---------}
@@ -54,8 +54,12 @@ identifier = (lexeme . try) (p >>= check)
 
 {-----------------Parser------------------}
 -- Evaluate an input program as a string, return a pretty list of final state variables
-evaluate :: String -> String
-evaluate s = pretty_print $ s_dynamic (parseString s) baseState
+eval_dynamic :: String -> String
+eval_dynamic s = pretty_print $ s_dynamic (parseString s) baseState
+
+-- Evaluate an input program as a string, return a pretty list of final state variables
+eval_mixed :: String -> String
+eval_mixed s = pretty_print $ s_mixed (parseString s) baseState
 
 -- Convert an input string to a Stm using procParser
 parseString :: String -> Stm

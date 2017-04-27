@@ -46,6 +46,7 @@ end
 
 "x := 1;\nbegin\nvar y := 10;\nproc p is (x := x * 10);\ncall p\nend"
 
+"x := 1"
 
 //scope test (p.53)
 begin
@@ -61,3 +62,18 @@ begin
 end
 
 "begin\n  var x:=0;\n  proc p is x:=x*2;\n  proc q is call p;\n  begin\n    var x:=5;\n    proc p is (x:=x+1;x:=x+1);\n    call q;\n    y:=x\n  end\nend"
+
+//scope test (p.53)
+y := 1;
+x := 8;
+z := 2;
+begin
+  var x := 0;
+  proc p is x := x*2;
+  begin
+    var x := 5;
+    y := x;
+    proc q = call p
+    call q
+  end
+end

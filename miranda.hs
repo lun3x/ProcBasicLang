@@ -14,8 +14,15 @@ type Pname = String
 type DecV = [(Var, Aexp)]
 type DecP = [(Pname, Stm)]
 
+type PSEnv = Pname -> PEnvS
+data PEnvS = PEnv (Stm) (PSEnv)
+
 type EnvP = Pname -> Stm
 type State = Var -> Z
+
+type Loc = Z
+type EnvV = Var -> Loc
+type Store = Loc -> Z
 
 -- Defining data constructors
 data Aexp = N Num
@@ -48,9 +55,6 @@ pretty_print s = "x: " ++ show (s "x") ++ " y: " ++ show (s "y") ++ " z: " ++ sh
 
 n_val :: Num -> Z
 n_val x = x
-
-baseEnv :: EnvP
-baseEnv _ = Skip
 
 baseState :: State
 baseState _ = 0
@@ -170,17 +174,36 @@ resetVars :: State -> State -> DecV -> State
 resetVars s s' [] = s'
 resetVars s s' d  = resetVars s (update s' (s (fst (head d))) (fst (head d))) (tail d)
 
+baseEnvP :: EnvP
+baseEnvP _ = Skip
+
+baseEnvV :: EnvV
+baseEnvV _ = -1
+
+baseStore :: Store
+baseStore _ = 0
+
 -- Recurse through all procedure declarations to update environment
-updateEnvs :: EnvP -> DecP -> EnvP
-updateEnvs env [] = env
-updateEnvs env ps = updateEnvs (updateEnv env ps) (tail ps)
+updateEnvPs :: EnvP -> DecP -> EnvP
+updateEnvPs env [] = env
+updateEnvPs env ps = updateEnvPs (updateEnvP env ps) (tail ps)
 
 -- Update environment with first declaration in DecP
-updateEnv :: EnvP -> DecP -> EnvP
-updateEnv env decP = env'
-               where env' pName
-                        | pName == (fst (head decP)) = snd (head decP)
-                        | otherwise                  = env pName
+updateEnvP :: EnvP -> DecP -> EnvP
+updateEnvP env decP = env'
+                where env' pName
+                         | pName == (fst (head decP)) = snd (head decP)
+                         | otherwise                  = env pName
+
+updatePSEnvs :: PSEnv -> DecP -> PSEnv
+updatePSEnvs env [] = env
+updatePSEnvs env ps = updatePSEnvs (updatePSEnv env ps) (tail ps)
+
+updatePSEnv :: PSEnv -> DecP -> PSEnv
+updatePSEnv env decP = env'
+                 where env' pName
+                          | pName == (fst (head decP)) = PEnv (snd (head decP)) env'
+                          | otherwise                  = env pName
 
 -- Update the current state given a statement and the environment
 s_ds_dynamic :: Stm -> EnvP -> State -> State
@@ -191,15 +214,36 @@ s_ds_dynamic (If test stm1 stm2) e s   = cond (b_val test, s_ds_dynamic stm1 e, 
 s_ds_dynamic (While test stm) e s      = fix f s where
                                              f g = cond (b_val test, g . (s_ds_dynamic stm e), s_ds_dynamic Skip e)
 s_ds_dynamic (Block decV decP stm) e s = resetVars s (s_ds_dynamic (Comp (decVToAss decV) stm) e' s) decV where
-                                                                                               e' = updateEnvs e decP
+                                                                                               e' = updateEnvPs e decP
 s_ds_dynamic (Call n) e s              = s_ds_dynamic (e n) e s
 
 -- Testing wrapper function
 s_dynamic :: Stm -> State -> State
-s_dynamic stm state = s_ds_dynamic stm baseEnv state
+s_dynamic stm state = s_ds_dynamic stm baseEnvP state
 
-s_ds_mixed :: Stm -> EnvP -> State -> State
-s_ds_mixed = undefined
+baseEnvPS :: PSEnv
+baseEnvPS _ = PEnv (Skip) (baseEnvPS)
+
+s_ds_mixed :: Stm -> PSEnv -> State -> State
+s_ds_mixed Skip e s                  = s
+s_ds_mixed (Ass v exp0) e s          = update s (a_val exp0 s) v
+s_ds_mixed (Comp stm1 stm2) e s      = s_ds_mixed stm2 e (s_ds_mixed stm1 e s)
+s_ds_mixed (If test stm1 stm2) e s   = cond (b_val test, s_ds_mixed stm1 e, s_ds_mixed stm2 e) s
+s_ds_mixed (While test stm) e s      = fix f s where
+                                           f g = cond (b_val test, g . (s_ds_mixed stm e), s_ds_mixed Skip e)
+s_ds_mixed (Block decV decP stm) e s = resetVars s (s_ds_mixed (Comp (decVToAss decV) stm) e' s) decV where
+                                                                                           e' = updatePSEnvs e decP
+s_ds_mixed (Call p) e s              = s_ds_mixed stmt e'' s where
+                                                 (PEnv stmt e') = e p
+                                                 e'' p'
+                                                   | p' == p   = (PEnv stmt e')
+                                                   | otherwise = e' p
 
 s_mixed :: Stm -> State -> State
-s_mixed stm state = s_ds_mixed stm baseEnv state
+s_mixed stm state = s_ds_mixed stm baseEnvPS state
+
+s_ds_static :: EnvV -> EnvP -> Stm -> Store -> Store
+s_ds_static = undefined
+
+new :: Loc -> Loc
+new = (+ 1)
