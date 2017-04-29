@@ -14,8 +14,11 @@ type Pname = String
 type DecV = [(Var, Aexp)]
 type DecP = [(Pname, Stm)]
 
-type PSEnv = Pname -> PEnvS
-data PEnvS = PEnv (Stm) (PSEnv)
+type EnvSP = Pname -> EnvSP'
+data EnvSP' = EnvSP' Stm EnvSP
+
+instance Show EnvSP' where
+  show (EnvSP' s e) = show s
 
 type EnvP = Pname -> Stm
 type State = Var -> Z
@@ -145,6 +148,9 @@ condit = Neg (Eq (V "x") (N 1))
 p :: Stm
 p = stmt0 `Comp` (While condit (stmt1 `Comp` stmt2))
 
+p2 :: Stm
+p2 = While (Le (V "x") (N 5)) ("x" `Ass` ((V "x") `Add` (N 1)))
+
 update :: State -> Z -> Var -> State
 update s i v = s' where          -- equals updated state
                s' v'               -- where in the updated state
@@ -195,14 +201,14 @@ updateEnvP env decP = env'
                          | pName == (fst (head decP)) = snd (head decP)
                          | otherwise                  = env pName
 
-updatePSEnvs :: PSEnv -> DecP -> PSEnv
-updatePSEnvs env [] = env
-updatePSEnvs env ps = updatePSEnvs (updatePSEnv env ps) (tail ps)
+updateEnvSPs :: EnvSP -> DecP -> EnvSP
+updateEnvSPs env [] = env
+updateEnvSPs env ps = updateEnvSPs (updateEnvSP env ps) (tail ps)
 
-updatePSEnv :: PSEnv -> DecP -> PSEnv
-updatePSEnv env decP = env'
+updateEnvSP :: EnvSP -> DecP -> EnvSP
+updateEnvSP env decP = env'
                  where env' pName
-                          | pName == (fst (head decP)) = PEnv (snd (head decP)) env'
+                          | pName == (fst (head decP)) = EnvSP' (snd (head decP)) env
                           | otherwise                  = env pName
 
 -- Update the current state given a statement and the environment
@@ -221,10 +227,10 @@ s_ds_dynamic (Call n) e s              = s_ds_dynamic (e n) e s
 s_dynamic :: Stm -> State -> State
 s_dynamic stm state = s_ds_dynamic stm baseEnvP state
 
-baseEnvPS :: PSEnv
-baseEnvPS _ = PEnv (Skip) (baseEnvPS)
+baseEnvSP :: EnvSP
+baseEnvSP _ = EnvSP' Skip baseEnvSP
 
-s_ds_mixed :: Stm -> PSEnv -> State -> State
+s_ds_mixed :: Stm -> EnvSP -> State -> State
 s_ds_mixed Skip e s                  = s
 s_ds_mixed (Ass v exp0) e s          = update s (a_val exp0 s) v
 s_ds_mixed (Comp stm1 stm2) e s      = s_ds_mixed stm2 e (s_ds_mixed stm1 e s)
@@ -232,18 +238,22 @@ s_ds_mixed (If test stm1 stm2) e s   = cond (b_val test, s_ds_mixed stm1 e, s_ds
 s_ds_mixed (While test stm) e s      = fix f s where
                                            f g = cond (b_val test, g . (s_ds_mixed stm e), s_ds_mixed Skip e)
 s_ds_mixed (Block decV decP stm) e s = resetVars s (s_ds_mixed (Comp (decVToAss decV) stm) e' s) decV where
-                                                                                           e' = updatePSEnvs e decP
-s_ds_mixed (Call p) e s              = s_ds_mixed stmt e'' s where
-                                                 (PEnv stmt e') = e p
-                                                 e'' p'
-                                                   | p' == p   = (PEnv stmt e')
-                                                   | otherwise = e' p
+                                                                                           e' = updateEnvSPs e decP
+s_ds_mixed (Call pName) env state = state' where
+  state' = s_ds_mixed stmt env'' state where
+    (EnvSP' stmt env') = env pName
+    env'' pName'
+        | pName' == pName = (EnvSP' stmt env')
+        | otherwise       = env' pName
 
 s_mixed :: Stm -> State -> State
-s_mixed stm state = s_ds_mixed stm baseEnvPS state
+s_mixed stm state = s_ds_mixed stm baseEnvSP state
 
 s_ds_static :: EnvV -> EnvP -> Stm -> Store -> Store
 s_ds_static = undefined
 
 new :: Loc -> Loc
 new = (+ 1)
+
+scopeTestStm :: Stm
+scopeTestStm = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
