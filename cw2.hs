@@ -17,15 +17,21 @@ type DecP = [(Pname, Stm)]
 type EnvSP = Pname -> EnvSP'
 data EnvSP' = EnvSP' Stm EnvSP
 
-data ConfigD = Inter Stm State
-             | Final State
+data ConfigP = InterP Stm State
+             | FinalP State
+
+data ConfigD = InterD DecV DecP Stm State
+             | FinalD DecV DecP State
 
 type EnvP = Pname -> Stm
 type State = Var -> Z
 
 type Loc = Z
+data Loc' = Loc' Loc
+          | Next
+type Store = Loc' -> Z
+
 type EnvV = Var -> Loc
-type Store = Loc -> Z
 
 -- Defining data constructors
 data Aexp = N Num
@@ -211,16 +217,24 @@ updateEnvSP env decP = env'
                           | pName == (fst (head decP)) = EnvSP' (snd (head decP)) env
                           | otherwise                  = env pName
 
+updateDecVs :: State -> DecV -> State
+updateDecVs s []   = s
+updateDecVs s decV = updateDecVs (updateDecV s decV) (tail decV)
+
+updateDecV :: State -> DecV -> State
+updateDecV s decV = update s (a_val (snd (head decV)) s) (fst (head decV))
+
 -- Update the current state given a statement and the environment
 s_ds_dynamic :: Stm -> EnvP -> State -> State
 s_ds_dynamic Skip e s                  = s
 s_ds_dynamic (Ass v exp0) e s          = update s (a_val exp0 s) v
 s_ds_dynamic (Comp stm1 stm2) e s      = s_ds_dynamic stm2 e (s_ds_dynamic stm1 e s)
 s_ds_dynamic (If test stm1 stm2) e s   = cond (b_val test, s_ds_dynamic stm1 e, s_ds_dynamic stm2 e) s
-s_ds_dynamic (While test stm) e s      = fix f s where
-                                             f g = cond (b_val test, g . (s_ds_dynamic stm e), s_ds_dynamic Skip e)
-s_ds_dynamic (Block decV decP stm) e s = resetVars s (s_ds_dynamic (Comp (decVToAss decV) stm) e' s) decV where
-                                                                                               e' = updateEnvPs e decP
+s_ds_dynamic (While test stm) e s      = fix f s
+                                       where f g = cond (b_val test, g . (s_ds_dynamic stm e), s_ds_dynamic Skip e)
+s_ds_dynamic (Block decV decP stm) e s = resetVars s (s_ds_dynamic stm e' s') decV
+                                                                 where e' = updateEnvPs e decP
+                                                                       s' = updateDecVs s decV
 s_ds_dynamic (Call n) e s              = s_ds_dynamic (e n) e s
 
 -- Testing wrapper function
@@ -235,10 +249,11 @@ s_ds_mixed Skip e s                  = s
 s_ds_mixed (Ass v exp0) e s          = update s (a_val exp0 s) v
 s_ds_mixed (Comp stm1 stm2) e s      = s_ds_mixed stm2 e (s_ds_mixed stm1 e s)
 s_ds_mixed (If test stm1 stm2) e s   = cond (b_val test, s_ds_mixed stm1 e, s_ds_mixed stm2 e) s
-s_ds_mixed (While test stm) e s      = fix f s where
-                                           f g = cond (b_val test, g . (s_ds_mixed stm e), s_ds_mixed Skip e)
-s_ds_mixed (Block decV decP stm) e s = resetVars s (s_ds_mixed (Comp (decVToAss decV) stm) e' s) decV where
-                                                                                           e' = updateEnvSPs e decP
+s_ds_mixed (While test stm) e s      = fix f s
+                                     where f g = cond (b_val test, g . (s_ds_mixed stm e), s_ds_mixed Skip e)
+s_ds_mixed (Block decV decP stm) e s = resetVars s (s_ds_mixed stm e' s') decV
+                                                             where e' = updateEnvSPs e decP
+                                                                   s' = updateDecVs  s decV
 s_ds_mixed (Call pName) env state    = state' where
   state' = s_ds_mixed stmt env'' state where
     (EnvSP' stmt env') = env pName
@@ -255,26 +270,29 @@ s_ds_static = undefined
 scopeTestStm :: Stm
 scopeTestStm = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
 
-ns_stm :: ConfigD -> ConfigD
-ns_stm (Inter (Ass x a) s) = Final (update s (a_val a s) x)
-ns_stm (Inter (Skip)    s) = Final s
-ns_stm (Inter (Comp stm1 stm2) s) = Final s'' where
-  Final s'  = ns_stm (Inter stm1 s)
-  Final s'' = ns_stm (Inter stm1 s)
-ns_stm (Inter (If test stm1 stm2) s) = Final s' where
-  Final s'
-    | b_val test s == True = ns_stm (Inter stm1 s)
-    | otherwise            = ns_stm (Inter stm2 s)
-ns_stm (Inter (While test stm) s) = Final s'' where
-  Final s''
-    | b_val test s == True = Final loop_state
-    | otherwise            = Final s
-  Final loop_state  = ns_stm (Inter (While test stm) inter_state)
-  Final inter_state = ns_stm (Inter stm s)
+ns_stm :: ConfigP -> ConfigP
+ns_stm (InterP (Ass x a) s) = FinalP (update s (a_val a s) x)
+ns_stm (InterP (Skip)    s) = FinalP s
+ns_stm (InterP (Comp stm1 stm2) s) = FinalP s'' where
+  FinalP s'  = ns_stm (InterP stm1 s)
+  FinalP s'' = ns_stm (InterP stm1 s)
+ns_stm (InterP (If test stm1 stm2) s) = FinalP s' where
+  FinalP s'
+    | b_val test s == True = ns_stm (InterP stm1 s)
+    | otherwise            = ns_stm (InterP stm2 s)
+ns_stm (InterP (While test stm) s) = FinalP s'' where
+  FinalP s''
+    | b_val test s == True = FinalP loop_state
+    | otherwise            = FinalP s
+  FinalP loop_state  = ns_stm (InterP (While test stm) inter_state)
+  FinalP inter_state = ns_stm (InterP stm s)
+
+ns_decV :: ConfigD -> ConfigD
+ns_decV (InterD dVs dPs stm state) = undefined
 
 s_ns :: Stm -> State -> State
 s_ns stm s = s' where
-  Final s' = ns_stm (Inter stm s)
+  FinalP s' = ns_stm (InterP stm s)
 
 new :: Loc -> Loc
 new = (+ 1)
