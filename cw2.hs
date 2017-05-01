@@ -1,4 +1,4 @@
-module Miranda where
+module CW2 where
 
 import Prelude hiding (Num)
 import Data.List
@@ -17,8 +17,8 @@ type DecP = [(Pname, Stm)]
 type EnvSP = Pname -> EnvSP'
 data EnvSP' = EnvSP' Stm EnvSP
 
-instance Show EnvSP' where
-  show (EnvSP' s e) = show s
+data ConfigD = Inter Stm State
+             | Final State
 
 type EnvP = Pname -> Stm
 type State = Var -> Z
@@ -239,7 +239,7 @@ s_ds_mixed (While test stm) e s      = fix f s where
                                            f g = cond (b_val test, g . (s_ds_mixed stm e), s_ds_mixed Skip e)
 s_ds_mixed (Block decV decP stm) e s = resetVars s (s_ds_mixed (Comp (decVToAss decV) stm) e' s) decV where
                                                                                            e' = updateEnvSPs e decP
-s_ds_mixed (Call pName) env state = state' where
+s_ds_mixed (Call pName) env state    = state' where
   state' = s_ds_mixed stmt env'' state where
     (EnvSP' stmt env') = env pName
     env'' pName'
@@ -252,8 +252,29 @@ s_mixed stm state = s_ds_mixed stm baseEnvSP state
 s_ds_static :: EnvV -> EnvP -> Stm -> Store -> Store
 s_ds_static = undefined
 
-new :: Loc -> Loc
-new = (+ 1)
-
 scopeTestStm :: Stm
 scopeTestStm = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
+
+ns_stm :: ConfigD -> ConfigD
+ns_stm (Inter (Ass x a) s) = Final (update s (a_val a s) x)
+ns_stm (Inter (Skip)    s) = Final s
+ns_stm (Inter (Comp stm1 stm2) s) = Final s'' where
+  Final s'  = ns_stm (Inter stm1 s)
+  Final s'' = ns_stm (Inter stm1 s)
+ns_stm (Inter (If test stm1 stm2) s) = Final s' where
+  Final s'
+    | b_val test s == True = ns_stm (Inter stm1 s)
+    | otherwise            = ns_stm (Inter stm2 s)
+ns_stm (Inter (While test stm) s) = Final s'' where
+  Final s''
+    | b_val test s == True = Final loop_state
+    | otherwise            = Final s
+  Final loop_state  = ns_stm (Inter (While test stm) inter_state)
+  Final inter_state = ns_stm (Inter stm s)
+
+s_ns :: Stm -> State -> State
+s_ns stm s = s' where
+  Final s' = ns_stm (Inter stm s)
+
+new :: Loc -> Loc
+new = (+ 1)

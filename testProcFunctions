@@ -61,6 +61,8 @@ begin
   end
 end
 
+"begin proc p is (call p); call p end"
+
 "begin\n  var x:=0;\n  proc p is x:=x*2;\n  proc q is call p;\n  begin\n    var x:=5;\n    proc p is (x:=x+1);\n    call q;\n    y:=x\n  end\nend"
 
 //scope test (p.53)

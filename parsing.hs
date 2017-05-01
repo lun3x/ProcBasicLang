@@ -3,8 +3,8 @@ import Text.Megaparsec
 import Text.Megaparsec.Expr
 import Text.Megaparsec.String
 import qualified Text.Megaparsec.Lexer as L
-import Miranda (DecV, DecP, Aexp(N, V, Mult, Add, Sub), Bexp(TRUE, FALSE, Neg, And, Eq, Le), Stm(Ass, Skip, Comp, If, While, Block, Call))
-import Miranda(pretty_print, s_dynamic, s_mixed, baseState)
+import CW2 (DecV, DecP, Aexp(N, V, Mult, Add, Sub), Bexp(TRUE, FALSE, Neg, And, Eq, Le), Stm(Ass, Skip, Comp, If, While, Block, Call))
+import CW2 (pretty_print, s_dynamic, s_mixed, baseState)
 import Data.List
 
 {---------Lexer---------}
