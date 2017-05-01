@@ -288,7 +288,7 @@ ns_stm (InterP (While test stm) s) = FinalP s'' where
   FinalP inter_state = ns_stm (InterP stm s)
 
 ns_decV :: ConfigD -> ConfigD
-ns_decV (InterD dVs dPs stm state) = undefined
+ns_decV (InterD dVs dPs stm state) = FinalD dVs dPs (updateDecVs state dVs)
 
 s_ns :: Stm -> State -> State
 s_ns stm s = s' where
