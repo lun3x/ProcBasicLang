@@ -110,8 +110,23 @@ assignDecPs (dp:dps) eV eP = assignDecPs dps eV (assignDecP dp eV eP)
 assignDecP :: (Pname, Stm) -> EnvV -> MEnvP -> MEnvP
 assignDecP (pName, stm) eV eP = updateMEnvP eV eP pName stm
 
+updateEnvV :: EnvV -> Var -> Loc -> EnvV
+updateEnvV eV v loc = eV' where
+  eV' v'
+    | v' == v   = loc
+    | otherwise = eV v'
+
 assignDecVs :: EnvV -> Store -> DecV -> (EnvV, Store)
-assignDecVs = undefined
+assignDecVs eV sto []       = (eV, sto)
+assignDecVs eV sto (dv:dvs) = assignDecVs eV' sto' dvs where
+  (eV', sto') = assignDecV eV sto dv
+
+assignDecV :: EnvV -> Store -> (Var, Aexp) -> (EnvV, Store)
+assignDecV eV sto (v, expr) = (eV', sto') where
+  eV' = updateEnvV eV v l
+  sto' = incStoreNext (updateStore sto l (a_val expr eV sto))
+  l = sto Next
+
 -- assignDecVs s []     = s
 -- assignDecVs s (dv:dvs) = assignDecVs (assignDecV s dv) dvs
 --
@@ -121,14 +136,24 @@ assignDecVs = undefined
 -- ns_decV :: ConfigD -> ConfigD
 -- ns_decV (InterD dVs dPs stm state) = FinalD dVs dPs (assignDecVs state dVs)
 
-updateStore :: EnvV -> Store -> Var -> Z -> Store
-updateStore e s x i = s' where
+incStoreNext :: Store -> Store
+incStoreNext sto = sto' where
+  sto' Next = new (sto Next)
+
+updateStore :: Store -> Loc -> Z -> Store
+updateStore sto loc i = sto' where
+  sto' (Loc' loc')
+     | loc' == loc = i
+     | otherwise   = sto (Loc' loc')
+
+updateStore' :: EnvV -> Store -> Var -> Z -> Store
+updateStore' e s x i = s' where
   s' (Loc' loc)
          | loc == e x = i
          | otherwise  = s (Loc' (e x))
 
 ns_stm :: EnvV -> MEnvP -> ConfigP -> ConfigP
-ns_stm eV eP (InterP (Ass v a) sto) = FinalP (updateStore eV sto v (a_val a eV sto))
+ns_stm eV eP (InterP (Ass v a) sto) = FinalP (updateStore' eV sto v (a_val a eV sto))
 ns_stm eV eP (InterP (Skip) sto) = FinalP sto
 ns_stm eV eP (InterP (Comp stm1 stm2) sto) = FinalP sto'' where
   FinalP sto'  = ns_stm eV eP (InterP stm1 sto)
