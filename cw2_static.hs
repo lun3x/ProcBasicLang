@@ -64,6 +64,10 @@ n_val x = x
 getFromStore :: EnvV -> Store -> Var -> Z
 getFromStore e s x = s (Loc' (e x))
 
+getStoreFromConfig :: ConfigP -> Store
+getStoreFromConfig (FinalP sto) = sto
+getStoreFromConfig (InterP stm sto) = sto
+
 -- Evaluate arithmetic expression
 a_val :: Aexp -> EnvV -> Store -> Z
 a_val (N n) eV s              = n_val n
@@ -130,18 +134,21 @@ assignDecV eV sto (v, expr) = (eV', sto') where
 incStoreNext :: Store -> Store
 incStoreNext sto = sto' where
   sto' Next = new (sto Next)
+  sto' l    = sto l
 
 updateStore :: Store -> Loc -> Z -> Store
 updateStore sto loc i = sto' where
   sto' (Loc' loc')
      | loc' == loc = i
      | otherwise   = sto (Loc' loc')
+  sto' Next = sto Next
 
 updateStore' :: EnvV -> Store -> Var -> Z -> Store
 updateStore' e s x i = s' where
   s' (Loc' loc)
          | loc == e x = i
          | otherwise  = s (Loc' (e x))
+  s' Next = s Next
 
 -- ns_decV :: EnvV -> ConfigD -> ConfigD
 -- ns_decV eV (InterD dVs dPs stm sto) = FinalD dVs dPs (snd (assignDecVs eV sto dVs))
@@ -169,3 +176,31 @@ ns_stm eV eP (InterP (Block decV decP stm) sto) = FinalP sto'' where
 ns_stm eV (MEnvP eP) (InterP (Call pName) sto) = FinalP sto' where
   FinalP sto' = ns_stm eV' (updateMEnvP eV' eP' pName stmt) (InterP stmt sto)
   (stmt, eV', eP') = eP pName
+
+baseMEnvP :: MEnvP
+baseMEnvP = MEnvP baseMEnvP'
+
+baseEnvV :: EnvV
+baseEnvV _ = 0
+
+baseMEnvP' :: Pname -> (Stm, EnvV, MEnvP)
+baseMEnvP' _ = (Skip, baseEnvV, baseMEnvP)
+
+baseState :: State
+baseState _ = 0
+
+baseStore :: Store
+baseStore Next = 1
+baseStore _    = 0
+
+scopeTestStm :: Stm
+scopeTestStm = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
+
+scopeTestConfig :: ConfigP
+scopeTestConfig = InterP scopeTestStm baseStore
+
+pretty_print :: State -> String
+pretty_print s = "x: " ++ show (s "x") ++ " y: " ++ show (s "y") ++ " z: " ++ show (s "z")
+
+facStm :: Stm
+facStm = Block [("y",N 5)] [("fac",Block [("z",V "x")] [] (If (Eq (V "x") (N 1)) Skip (Comp (Ass "x" (Sub (V "x") (N 1))) (Comp (Call "fac") (Ass "y" (Mult (V "z") (V "y")))))))] (Comp (Ass "y" (N 1)) (Call "fac"))
