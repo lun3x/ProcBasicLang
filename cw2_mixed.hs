@@ -85,15 +85,15 @@ updateState s i v = s' where          -- equals updated state
    | v' == v   = i    -- the relevant variable equals the new integer
    | otherwise = s v' -- the other variables stay the same
 
+resetVars :: State -> State -> DecV -> State
+resetVars s s' [] = s'
+resetVars s s' d  = resetVars s (updateState s' (s (fst (head d))) (fst (head d))) (tail d)
+
 updateMEnvP :: MEnvP -> Pname -> Stm -> MEnvP
 updateMEnvP (MEnvP e) pName stm = MEnvP e' where
   e' pName'
    | pName' == pName = (stm, MEnvP e)
-   | otherwise       = (fst (e pName), MEnvP e)
-
-resetVars :: State -> State -> DecV -> State
-resetVars s s' [] = s'
-resetVars s s' d  = resetVars s (updateState s' (s (fst (head d))) (fst (head d))) (tail d)
+   | otherwise       = e pName'
 
 assignDecPs :: MEnvP -> DecP -> MEnvP
 assignDecPs e [] = e
