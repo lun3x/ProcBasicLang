@@ -16,8 +16,8 @@ newtype MEnvP = MEnvP (Pname -> (Stm, EnvV, MEnvP))
 
 type State = Var -> Z
 
-data ConfigD = InterD DecV DecP Stm State
-             | FinalD DecV DecP State
+data ConfigD = InterD DecV DecP Stm Store
+             | FinalD DecV DecP Store
 
 data ConfigP = InterP Stm Store
              | FinalP Store
@@ -127,15 +127,6 @@ assignDecV eV sto (v, expr) = (eV', sto') where
   sto' = incStoreNext (updateStore sto l (a_val expr eV sto))
   l = sto Next
 
--- assignDecVs s []     = s
--- assignDecVs s (dv:dvs) = assignDecVs (assignDecV s dv) dvs
---
--- assignDecV :: EnvV -> (Var, Aexp) -> EnvV
--- assignDecV s (v, expr) = updateStore s (a_val expr s) v
-
--- ns_decV :: ConfigD -> ConfigD
--- ns_decV (InterD dVs dPs stm state) = FinalD dVs dPs (assignDecVs state dVs)
-
 incStoreNext :: Store -> Store
 incStoreNext sto = sto' where
   sto' Next = new (sto Next)
@@ -151,6 +142,9 @@ updateStore' e s x i = s' where
   s' (Loc' loc)
          | loc == e x = i
          | otherwise  = s (Loc' (e x))
+
+-- ns_decV :: EnvV -> ConfigD -> ConfigD
+-- ns_decV eV (InterD dVs dPs stm sto) = FinalD dVs dPs (snd (assignDecVs eV sto dVs))
 
 ns_stm :: EnvV -> MEnvP -> ConfigP -> ConfigP
 ns_stm eV eP (InterP (Ass v a) sto) = FinalP (updateStore' eV sto v (a_val a eV sto))
@@ -172,3 +166,6 @@ ns_stm eV eP (InterP (Block decV decP stm) sto) = FinalP sto'' where
   FinalP sto'' = ns_stm eV' eP' (InterP stm sto')
   (eV', sto') = assignDecVs eV sto decV
   eP'         = assignDecPs decP eV' eP
+ns_stm eV (MEnvP eP) (InterP (Call pName) sto) = FinalP sto' where
+  FinalP sto' = ns_stm eV' (updateMEnvP eV' eP' pName stmt) (InterP stmt sto)
+  (stmt, eV', eP') = eP pName

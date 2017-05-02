@@ -120,7 +120,7 @@ s_ds_mixed (Block decV decP stm) e s = resetVars s (s_ds_mixed stm e' s') decV w
                                                                    e' = assignDecPs e decP
                                                                    s' = assignDecVs s decV
 s_ds_mixed (Call pName) (MEnvP env) state = state' where
-  state' = s_ds_mixed stmt env' state where
+  state' = s_ds_mixed stmt (updateMEnvP env' pName stmt) state where
      (stmt, env') = env pName
 
 baseMEnvP :: MEnvP
