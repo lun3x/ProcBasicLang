@@ -24,7 +24,7 @@ data ConfigD = InterD DecV DecP Stm State
              | FinalD DecV DecP State
 
 data ConfigP = InterP Stm Store
-             | Final Store
+             | FinalP Store
 
 type EnvP = Pname -> Stm
 type State = Var -> Z
@@ -298,6 +298,3 @@ s_ns stm s = s' where
 
 new :: Loc -> Loc
 new = (+ 1)
-
-ns_stm2 :: EnvV -> EnvP -> ConfigP -> ConfigP
-ns_stm2 envV envP (Inter (Ass x a) sto) = Final (update sto )
