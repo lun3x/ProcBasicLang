@@ -17,11 +17,14 @@ type DecP = [(Pname, Stm)]
 type EnvSP = Pname -> EnvSP'
 data EnvSP' = EnvSP' Stm EnvSP
 
-data ConfigP = InterP Stm State
-             | FinalP State
+data Config = Inter Stm State
+            | Final State
 
 data ConfigD = InterD DecV DecP Stm State
              | FinalD DecV DecP State
+
+data ConfigP = InterP Stm Store
+             | Final Store
 
 type EnvP = Pname -> Stm
 type State = Var -> Z
@@ -174,12 +177,6 @@ cond (test, func1, func2) state
 fix :: ((State->State) -> (State->State)) -> (State->State)
 fix ff = ff (fix ff)
 
--- Convert DecV (list of declarations) to Stm using Comp
-decVToAss :: DecV -> Stm
-decVToAss d
-  | length d == 1 = Ass (fst (head d)) (snd (head d)) -- Avoids using Comp when there is only one statement
-  | otherwise     = Comp (Ass (fst (head d)) (snd (head d))) (decVToAss (tail d))
-
 -- Resets any variables that have had new ones declared with the same name to their original state
 -- (Preserves scoping)
 resetVars :: State -> State -> DecV -> State
@@ -195,7 +192,11 @@ baseEnvV _ = -1
 baseStore :: Store
 baseStore _ = 0
 
+upd_p :: DecP -> EnvSP -> EnvV -> EnvSP
+upd_p dp envSP envV = updateEnvSPs envSP dp
+
 -- Recurse through all procedure declarations to update environment
+-- upd_p
 updateEnvPs :: EnvP -> DecP -> EnvP
 updateEnvPs env [] = env
 updateEnvPs env ps = updateEnvPs (updateEnvP env ps) (tail ps)
@@ -217,6 +218,7 @@ updateEnvSP env decP = env'
                           | pName == (fst (head decP)) = EnvSP' (snd (head decP)) env
                           | otherwise                  = env pName
 
+-- ->_D
 updateDecVs :: State -> DecV -> State
 updateDecVs s []   = s
 updateDecVs s decV = updateDecVs (updateDecV s decV) (tail decV)
@@ -270,29 +272,32 @@ s_ds_static = undefined
 scopeTestStm :: Stm
 scopeTestStm = Block [("x",N 0)] [("p",Ass "x" (Mult (V "x") (N 2))),("q",Call "p")] (Block [("x",N 5)] [("p",Ass "x" (Add (V "x") (N 1)))] (Comp (Call "q") (Ass "y" (V "x"))))
 
-ns_stm :: ConfigP -> ConfigP
-ns_stm (InterP (Ass x a) s) = FinalP (update s (a_val a s) x)
-ns_stm (InterP (Skip)    s) = FinalP s
-ns_stm (InterP (Comp stm1 stm2) s) = FinalP s'' where
-  FinalP s'  = ns_stm (InterP stm1 s)
-  FinalP s'' = ns_stm (InterP stm1 s)
-ns_stm (InterP (If test stm1 stm2) s) = FinalP s' where
-  FinalP s'
-    | b_val test s == True = ns_stm (InterP stm1 s)
-    | otherwise            = ns_stm (InterP stm2 s)
-ns_stm (InterP (While test stm) s) = FinalP s'' where
-  FinalP s''
-    | b_val test s == True = FinalP loop_state
-    | otherwise            = FinalP s
-  FinalP loop_state  = ns_stm (InterP (While test stm) inter_state)
-  FinalP inter_state = ns_stm (InterP stm s)
+ns_stm :: Config -> Config
+ns_stm (Inter (Ass x a) s) = Final (update s (a_val a s) x)
+ns_stm (Inter (Skip)    s) = Final s
+ns_stm (Inter (Comp stm1 stm2) s) = Final s'' where
+  Final s'  = ns_stm (Inter stm1 s)
+  Final s'' = ns_stm (Inter stm1 s)
+ns_stm (Inter (If test stm1 stm2) s) = Final s' where
+  Final s'
+    | b_val test s == True = ns_stm (Inter stm1 s)
+    | otherwise            = ns_stm (Inter stm2 s)
+ns_stm (Inter (While test stm) s) = Final s'' where
+  Final s''
+    | b_val test s == True = Final loop_state
+    | otherwise            = Final s
+  Final loop_state  = ns_stm (Inter (While test stm) inter_state)
+  Final inter_state = ns_stm (Inter stm s)
 
 ns_decV :: ConfigD -> ConfigD
 ns_decV (InterD dVs dPs stm state) = FinalD dVs dPs (updateDecVs state dVs)
 
 s_ns :: Stm -> State -> State
 s_ns stm s = s' where
-  FinalP s' = ns_stm (InterP stm s)
+  Final s' = ns_stm (Inter stm s)
 
 new :: Loc -> Loc
 new = (+ 1)
+
+ns_stm2 :: EnvV -> EnvP -> ConfigP -> ConfigP
+ns_stm2 envV envP (Inter (Ass x a) sto) = Final (update sto )
