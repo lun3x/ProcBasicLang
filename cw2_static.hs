@@ -12,12 +12,9 @@ type Pname = String
 type DecV = [(Var, Aexp)]
 type DecP = [(Pname, Stm)]
 
-newtype MEnvP = MEnvP (Pname -> (Stm, MEnvP))
+newtype MEnvP = MEnvP (Pname -> (Stm, EnvV, MEnvP))
 
 type State = Var -> Z
-
-data Config = Inter Stm State
-            | Final State
 
 data ConfigD = InterD DecV DecP Stm State
              | FinalD DecV DecP State
@@ -100,20 +97,21 @@ b_val (Imp expr1 expr2) eV s
 new :: Loc -> Loc
 new = (+ 1)
 
-updateMEnvP :: MEnvP -> Pname -> Stm -> MEnvP
-updateMEnvP (MEnvP e) pName stm = MEnvP e' where
+updateMEnvP :: EnvV -> MEnvP -> Pname -> Stm -> MEnvP
+updateMEnvP eV (MEnvP e) pName stm = MEnvP e' where
   e' pName'
-   | pName' == pName = (stm, MEnvP e)
+   | pName' == pName = (stm, eV, MEnvP e)
    | otherwise       = e pName'
 
-assignDecPs :: MEnvP -> DecP -> MEnvP
-assignDecPs e [] = e
-assignDecPs e (dp:dps) = assignDecPs (assignDecP e dp) dps
+assignDecPs :: DecP -> EnvV -> MEnvP -> MEnvP
+assignDecPs [] eV eP       = eP
+assignDecPs (dp:dps) eV eP = assignDecPs dps eV (assignDecP dp eV eP)
 
-assignDecP :: MEnvP -> (Pname, Stm) -> MEnvP
-assignDecP e (pName, stm) = updateMEnvP e pName stm
+assignDecP :: (Pname, Stm) -> EnvV -> MEnvP -> MEnvP
+assignDecP (pName, stm) eV eP = updateMEnvP eV eP pName stm
 
--- assignDecVs :: EnvV -> Store -> DecV -> Store
+assignDecVs :: EnvV -> Store -> DecV -> (EnvV, Store)
+assignDecVs = undefined
 -- assignDecVs s []     = s
 -- assignDecVs s (dv:dvs) = assignDecVs (assignDecV s dv) dvs
 --
@@ -145,4 +143,7 @@ ns_stm eV eP (InterP (While test stm) sto) = FinalP sto'' where
     | otherwise                 = FinalP sto
   FinalP loop_store  = ns_stm eV eP (InterP (While test stm) inter_store)
   FinalP inter_store = ns_stm eV eP (InterP stm sto)
-ns_stm eV eP (Inter (Block decV decP stm) sto) 
+ns_stm eV eP (InterP (Block decV decP stm) sto) = FinalP sto'' where
+  FinalP sto'' = ns_stm eV' eP' (InterP stm sto')
+  (eV', sto') = assignDecVs eV sto decV
+  eP'         = assignDecPs decP eV' eP
