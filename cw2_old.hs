@@ -17,13 +17,6 @@ type DecP = [(Pname, Stm)]
 type EnvP = Pname -> Stm
 type State = Var -> Z
 
-type Loc = Z
-data Loc' = Loc' Loc
-          | Next
-type Store = Loc' -> Z
-
-type EnvV = Var -> Loc
-
 -- Defining data constructors
 data Aexp = N Num
           | V Var
@@ -177,12 +170,6 @@ baseEnvP _ = Skip
 baseEnvV :: EnvV
 baseEnvV _ = -1
 
-baseStore :: Store
-baseStore _ = 0
-
-upd_p :: DecP -> EnvSP -> EnvV -> EnvSP
-upd_p dp envSP envV = updateEnvSPs envSP dp
-
 -- Recurse through all procedure declarations to update environment
 -- upd_p
 updateEnvPs :: EnvP -> DecP -> EnvP
@@ -195,16 +182,6 @@ updateEnvP env decP = env'
                 where env' pName
                          | pName == (fst (head decP)) = snd (head decP)
                          | otherwise                  = env pName
-
-updateEnvSPs :: EnvSP -> DecP -> EnvSP
-updateEnvSPs env [] = env
-updateEnvSPs env ps = updateEnvSPs (updateEnvSP env ps) (tail ps)
-
-updateEnvSP :: EnvSP -> DecP -> EnvSP
-updateEnvSP env decP = env'
-                 where env' pName
-                          | pName == (fst (head decP)) = EnvSP' (snd (head decP)) env
-                          | otherwise                  = env pName
 
 -- ->_D
 updateDecVs :: State -> DecV -> State

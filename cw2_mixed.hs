@@ -95,19 +95,19 @@ updateMEnvP (MEnvP e) pName stm = MEnvP e' where
    | pName' == pName = (stm, MEnvP e)
    | otherwise       = e pName'
 
-assignDecPs :: MEnvP -> DecP -> MEnvP
-assignDecPs e [] = e
-assignDecPs e (dp:dps) = assignDecPs (assignDecP e dp) dps
+assignDecPs_m :: MEnvP -> DecP -> MEnvP
+assignDecPs_m e [] = e
+assignDecPs_m e (dp:dps) = assignDecPs_m (assignDecP_m e dp) dps
 
-assignDecP :: MEnvP -> (Pname, Stm) -> MEnvP
-assignDecP e (pName, stm) = updateMEnvP e pName stm
+assignDecP_m :: MEnvP -> (Pname, Stm) -> MEnvP
+assignDecP_m e (pName, stm) = updateMEnvP e pName stm
 
-assignDecVs :: State -> DecV -> State
-assignDecVs s []     = s
-assignDecVs s (dv:dvs) = assignDecVs (assignDecV s dv) dvs
+assignDecVs_m :: State -> DecV -> State
+assignDecVs_m s []     = s
+assignDecVs_m s (dv:dvs) = assignDecVs_m (assignDecV_m s dv) dvs
 
-assignDecV :: State -> (Var, Aexp) -> State
-assignDecV s (v, expr) = updateState s (a_val expr s) v
+assignDecV_m :: State -> (Var, Aexp) -> State
+assignDecV_m s (v, expr) = updateState s (a_val expr s) v
 
 s_ds_mixed :: Stm -> MEnvP -> State -> State
 s_ds_mixed Skip e s                  = s
@@ -117,8 +117,8 @@ s_ds_mixed (If test stm1 stm2) e s   = cond (b_val test, s_ds_mixed stm1 e, s_ds
 s_ds_mixed (While test stm) e s      = fix f s where
                                            f g = cond (b_val test, g . (s_ds_mixed stm e), s_ds_mixed Skip e)
 s_ds_mixed (Block decV decP stm) e s = resetVars s (s_ds_mixed stm e' s') decV where
-                                                                   e' = assignDecPs e decP
-                                                                   s' = assignDecVs s decV
+                                                                   e' = assignDecPs_m e decP
+                                                                   s' = assignDecVs_m s decV
 s_ds_mixed (Call pName) (MEnvP env) state = state' where
   state' = s_ds_mixed stmt (updateMEnvP env' pName stmt) state where
      (stmt, env') = env pName
