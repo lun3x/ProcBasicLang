@@ -69,31 +69,31 @@ getStoreFromConfig (FinalP sto) = sto
 getStoreFromConfig (InterP stm sto) = sto
 
 -- Evaluate arithmetic expression
-a_val :: Aexp -> EnvV -> Store -> Z
-a_val (N n) eV s              = n_val n
-a_val (V v) eV s              = getFromStore eV s v
-a_val (Mult expr1 expr2) eV s = (a_val expr1 eV s) * (a_val expr2 eV s)
-a_val (Add expr1 expr2) eV s  = (a_val expr1 eV s) + (a_val expr2 eV s)
-a_val (Sub expr1 expr2) eV s  = (a_val expr1 eV s) - (a_val expr2 eV s)
+a_val_s :: Aexp -> EnvV -> Store -> Z
+a_val_s (N n) eV s              = n_val n
+a_val_s (V v) eV s              = getFromStore eV s v
+a_val_s (Mult expr1 expr2) eV s = (a_val_s expr1 eV s) * (a_val_s expr2 eV s)
+a_val_s (Add expr1 expr2) eV s  = (a_val_s expr1 eV s) + (a_val_s expr2 eV s)
+a_val_s (Sub expr1 expr2) eV s  = (a_val_s expr1 eV s) - (a_val_s expr2 eV s)
 
 -- Evaluate boolean expression
-b_val :: Bexp -> EnvV -> Store -> T
-b_val TRUE eV s  = True
-b_val FALSE eV s = False
-b_val (Neg expr) eV s
-  | (b_val expr eV s) == True = False
+b_val_s :: Bexp -> EnvV -> Store -> T
+b_val_s TRUE eV s  = True
+b_val_s FALSE eV s = False
+b_val_s (Neg expr) eV s
+  | (b_val_s expr eV s) == True = False
   | otherwise                 = True
-b_val (And expr1 expr2) eV s
-  | ((b_val expr1 eV s) == True) && ((b_val expr2 eV s) == True) = True
+b_val_s (And expr1 expr2) eV s
+  | ((b_val_s expr1 eV s) == True) && ((b_val_s expr2 eV s) == True) = True
   | otherwise                                                    = False
-b_val (Eq expr1 expr2) eV s
-  | (a_val expr1 eV s) == (a_val expr2 eV s) = True
+b_val_s (Eq expr1 expr2) eV s
+  | (a_val_s expr1 eV s) == (a_val_s expr2 eV s) = True
   | otherwise                                = False
-b_val (Le expr1 expr2) eV s
-  | (a_val expr1 eV s) < (a_val expr2 eV s) = True
+b_val_s (Le expr1 expr2) eV s
+  | (a_val_s expr1 eV s) < (a_val_s expr2 eV s) = True
   | otherwise                               = False
-b_val (Imp expr1 expr2) eV s
-  | ((b_val expr1 eV s) == True) && ((b_val expr2 eV s) == False) = False
+b_val_s (Imp expr1 expr2) eV s
+  | ((b_val_s expr1 eV s) == True) && ((b_val_s expr2 eV s) == False) = False
   | otherwise                                                     = True
 
 -- Defining storewise functions
@@ -101,8 +101,8 @@ b_val (Imp expr1 expr2) eV s
 new :: Loc -> Loc
 new = (+ 1)
 
-updateMEnvP :: EnvV -> MEnvP -> Pname -> Stm -> MEnvP
-updateMEnvP eV (MEnvP e) pName stm = MEnvP e' where
+updateMEnvP_s :: EnvV -> MEnvP -> Pname -> Stm -> MEnvP
+updateMEnvP_s eV (MEnvP e) pName stm = MEnvP e' where
   e' pName'
    | pName' == pName = (stm, eV, MEnvP e)
    | otherwise       = e pName'
@@ -112,7 +112,7 @@ assignDecPs [] eV eP       = eP
 assignDecPs (dp:dps) eV eP = assignDecPs dps eV (assignDecP dp eV eP)
 
 assignDecP :: (Pname, Stm) -> EnvV -> MEnvP -> MEnvP
-assignDecP (pName, stm) eV eP = updateMEnvP eV eP pName stm
+assignDecP (pName, stm) eV eP = updateMEnvP_s eV eP pName stm
 
 updateEnvV :: EnvV -> Var -> Loc -> EnvV
 updateEnvV eV v loc = eV' where
@@ -128,7 +128,7 @@ assignDecVs eV sto (dv:dvs) = assignDecVs eV' sto' dvs where
 assignDecV :: EnvV -> Store -> (Var, Aexp) -> (EnvV, Store)
 assignDecV eV sto (v, expr) = (eV', sto') where
   eV' = updateEnvV eV v l
-  sto' = incStoreNext (updateStore sto l (a_val expr eV sto))
+  sto' = incStoreNext (updateStore sto l (a_val_s expr eV sto))
   l = sto Next
 
 incStoreNext :: Store -> Store
@@ -154,18 +154,18 @@ updateStore' e s x i = s' where
 -- ns_decV eV (InterD dVs dPs stm sto) = FinalD dVs dPs (snd (assignDecVs eV sto dVs))
 
 ns_stm :: EnvV -> MEnvP -> ConfigP -> ConfigP
-ns_stm eV eP (InterP (Ass v a) sto) = FinalP (updateStore' eV sto v (a_val a eV sto))
+ns_stm eV eP (InterP (Ass v a) sto) = FinalP (updateStore' eV sto v (a_val_s a eV sto))
 ns_stm eV eP (InterP (Skip) sto) = FinalP sto
 ns_stm eV eP (InterP (Comp stm1 stm2) sto) = FinalP sto'' where
   FinalP sto'  = ns_stm eV eP (InterP stm1 sto)
   FinalP sto'' = ns_stm eV eP (InterP stm1 sto)
 ns_stm eV eP (InterP (If test stm1 stm2) sto) = FinalP sto' where
   FinalP sto'
-    | b_val test eV sto == True = ns_stm eV eP (InterP stm1 sto)
+    | b_val_s test eV sto == True = ns_stm eV eP (InterP stm1 sto)
     | otherwise                 = ns_stm eV eP (InterP stm2 sto)
 ns_stm eV eP (InterP (While test stm) sto) = FinalP sto'' where
   FinalP sto''
-    | b_val test eV sto == True = FinalP loop_store
+    | b_val_s test eV sto == True = FinalP loop_store
     | otherwise                 = FinalP sto
   FinalP loop_store  = ns_stm eV eP (InterP (While test stm) inter_store)
   FinalP inter_store = ns_stm eV eP (InterP stm sto)
@@ -174,7 +174,7 @@ ns_stm eV eP (InterP (Block decV decP stm) sto) = FinalP sto'' where
   (eV', sto') = assignDecVs eV sto decV
   eP'         = assignDecPs decP eV' eP
 ns_stm eV (MEnvP eP) (InterP (Call pName) sto) = FinalP sto' where
-  FinalP sto' = ns_stm eV' (updateMEnvP eV' eP' pName stmt) (InterP stmt sto)
+  FinalP sto' = ns_stm eV' (updateMEnvP_s eV' eP' pName stmt) (InterP stmt sto)
   (stmt, eV', eP') = eP pName
 
 baseMEnvP :: MEnvP

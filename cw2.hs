@@ -3,7 +3,8 @@ module CW2 where
 import Prelude hiding (Num)
 import Data.List
 import Control.Monad (void)
-import Text.Megaparsec hiding (State)
+import Text.Megaparsec hiding (State, parse)
+import qualified Text.Megaparsec as M (parse)
 import Text.Megaparsec.Expr
 import Text.Megaparsec.String
 import qualified Text.Megaparsec.Lexer as L
@@ -432,19 +433,19 @@ identifier = (lexeme . try) (p >>= check)
 {-----------------Parser------------------}
 -- Evaluate an input program as a string, return a pretty list of final state variables
 eval_dynamic :: String -> String
-eval_dynamic s = pretty_print $ s_dynamic (parseString s) baseState
+eval_dynamic s = pretty_print $ s_dynamic (CW2.parse s) baseState
 
 -- Evaluate an input program as a string, return a pretty list of final state variables
 eval_mixed :: String -> String
-eval_mixed s = pretty_print $ s_mixed (parseString s) baseState
+eval_mixed s = pretty_print $ s_mixed (CW2.parse s) baseState
 
 eval_static :: String -> String
-eval_static s = pretty_print $ s_static (parseString s) baseState
+eval_static s = pretty_print $ s_static (CW2.parse s) baseState
 
 -- Convert an input string to a Stm using procParser
-parseString :: String -> Stm
-parseString str =
-  case parse procParser "" str of
+parse :: String -> Stm
+parse str =
+  case M.parse procParser "" str of
     Left e  -> error $ show e
     Right r -> r
 
